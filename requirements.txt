@@ -1,0 +1,5 @@
+streamlit==1.47.1
+requests==2.32.4
+matplotlib==3.10.5
+numpy==2.3.2
+pillow==11.3.0
