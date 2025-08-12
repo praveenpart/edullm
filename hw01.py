@@ -276,8 +276,14 @@ def create_smart_visualization(question, subject):
     question_lower = question.lower()
     
     try:
+        # Clear any existing plots to prevent interference
+        plt.close('all')
         plt.style.use('default')
         fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Set white background
+        fig.patch.set_facecolor('white')
+        ax.set_facecolor('white')
         
         # Mathematics visualizations
         if subject == "Mathematics":
@@ -320,19 +326,61 @@ def create_smart_visualization(question, subject):
                 ax.legend(fontsize=11)
                 
             elif any(term in question_lower for term in ['circle', 'radius', 'circumference']):
-                theta = np.linspace(0, 2*np.pi, 100)
-                r = 5
-                x = r * np.cos(theta)
-                y = r * np.sin(theta)
-                ax.plot(x, y, 'b-', linewidth=2, label=f'Circle (r={r})')
-                ax.set_aspect('equal')
-                ax.grid(True, alpha=0.3)
-                ax.axhline(y=0, color='k', linewidth=0.5)
-                ax.axvline(x=0, color='k', linewidth=0.5)
-                ax.set_xlabel('x', fontsize=12)
-                ax.set_ylabel('y', fontsize=12)
-                ax.set_title('Circle', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
+                try:
+                    # Extract radius from question if specified
+                    radius_match = re.search(r'radius\s*[=:]?\s*(\d+(?:\.\d+)?)', question_lower)
+                    r = float(radius_match.group(1)) if radius_match else 5.0
+                    
+                    # Validate radius value
+                    if r <= 0:
+                        r = 5.0  # Default to 5 if invalid radius
+                    elif r > 100:
+                        r = 100.0  # Cap at reasonable maximum
+                    
+                    # Create circle with higher resolution for smoother appearance
+                    theta = np.linspace(0, 2*np.pi, 400)
+                    x = r * np.cos(theta)
+                    y = r * np.sin(theta)
+                    
+                    # Plot circle
+                    ax.plot(x, y, 'b-', linewidth=2.5, label=f'Circle (r={r})')
+                    
+                    # Add center point
+                    ax.plot(0, 0, 'ro', markersize=6, label='Center (0,0)')
+                    
+                    # Add radius line
+                    ax.plot([0, r], [0, 0], 'r--', linewidth=1.5, alpha=0.7, label=f'Radius = {r}')
+                    
+                    # Set equal aspect ratio to ensure circle appears circular
+                    ax.set_aspect('equal', adjustable='box')
+                    
+                    # Set appropriate limits with padding
+                    padding = max(r * 0.2, 0.5)  # Ensure minimum padding
+                    ax.set_xlim(-r - padding, r + padding)
+                    ax.set_ylim(-r - padding, r + padding)
+                    
+                    # Add grid and axes
+                    ax.grid(True, alpha=0.3)
+                    ax.axhline(y=0, color='k', linewidth=0.5)
+                    ax.axvline(x=0, color='k', linewidth=0.5)
+                    
+                    # Labels and title
+                    ax.set_xlabel('x', fontsize=12)
+                    ax.set_ylabel('y', fontsize=12)
+                    ax.set_title(f'Circle with Radius {r}', fontsize=14, fontweight='bold')
+                    ax.legend(fontsize=10, loc='upper right')
+                    
+                except Exception as circle_error:
+                    print(f"Circle generation error: {str(circle_error)}")
+                    # Fallback to a simple default circle
+                    theta = np.linspace(0, 2*np.pi, 100)
+                    x = 5 * np.cos(theta)
+                    y = 5 * np.sin(theta)
+                    ax.plot(x, y, 'b-', linewidth=2, label='Circle (r=5)')
+                    ax.set_aspect('equal')
+                    ax.grid(True, alpha=0.3)
+                    ax.set_title('Circle', fontsize=14, fontweight='bold')
+                    ax.legend()
                 
             else:
                 # Default math visualization - coordinate plane
@@ -484,7 +532,13 @@ def create_smart_visualization(question, subject):
         return buf
         
     except Exception as e:
+        # Log the error for debugging
+        print(f"Visualization error: {str(e)}")
+        
+        # Ensure all matplotlib resources are cleaned up
         plt.close('all')
+        
+        # Return None to indicate failure
         return None
 
 def get_api_response(question, subject):
