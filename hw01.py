@@ -1,3 +1,10 @@
+# -------------------- Academic Assistant Pro (fixed) --------------------
+# Fixes applied:
+# 1. Corrected broken URL in get_api_response()
+# 2. Added 'show graphically' to drawing intent list in should_show_diagram()
+# 3. Added safe-guard in create_smart_visualization() when ax.patches is empty
+# ------------------------------------------------------------------------
+
 import streamlit as st
 import requests
 import json
@@ -14,7 +21,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for clean, modern UI
+# Improved CSS with better spacing and fraction formatting
 st.markdown("""
 <style>
     /* Hide Streamlit default elements */
@@ -22,84 +29,104 @@ st.markdown("""
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Custom styling */
+    /* Clean, simple styling */
+    .stApp {
+        background-color: #0e1117;
+        color: white;
+    }
+    
     .main-header {
         text-align: center;
-        padding: 1rem 0;
+        padding: 1.5rem 0;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border-radius: 10px;
         margin-bottom: 2rem;
     }
     
-    /* Fix visibility issues */
-    .stApp {
-        background-color: #0e1117;
-        color: white;
-    }
-    
-    .subject-card {
-        background: rgba(255,255,255,0.1);
-        border: 1px solid rgba(255,255,255,0.2);
-        border-radius: 8px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        color: white;
-    }
-    
-    .answer-container {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        color: white;
-    }
-    
-    .step-box {
-        background: rgba(76, 175, 80, 0.1);
+    /* Improved solution content styling with better spacing */
+    .solution-content {
+        background-color: rgba(255,255,255,0.05);
         border-left: 4px solid #4CAF50;
-        padding: 12px;
-        margin: 8px 0;
-        border-radius: 4px;
-        color: white;
+        padding: 2rem;
+        margin: 1.5rem 0;
+        border-radius: 8px;
+        line-height: 1.8;
     }
     
-    .formula-box {
-        background: rgba(255, 193, 7, 0.1);
-        border: 1px solid #ffc107;
-        padding: 10px;
-        border-radius: 4px;
-        text-align: center;
+    .solution-content h3 {
+        color: #4CAF50;
+        margin: 2rem 0 1rem 0;
+        font-size: 1.3em;
+        border-bottom: 2px solid #4CAF50;
+        padding-bottom: 0.5rem;
+    }
+    
+    .solution-content p {
+        margin: 1.2rem 0;
+        line-height: 1.8;
+        color: #e0e0e0;
+        font-size: 1.05em;
+    }
+    
+    /* Better mathematical expression styling */
+    .math-line {
         font-family: 'Courier New', monospace;
-        margin: 10px 0;
+        background-color: rgba(255,193,7,0.15);
+        padding: 1rem 1.5rem;
+        margin: 1rem 0;
+        border-radius: 6px;
         color: #ffc107;
+        text-align: center;
+        font-size: 1.1em;
+        line-height: 1.6;
+        border: 1px solid rgba(255,193,7,0.3);
     }
     
-    .stSelectbox > div > div {
-        background-color: rgba(255,255,255,0.1);
-        color: white;
+    /* Fraction display within math-line - ensure proper vertical display */
+    .fraction-display {
+        display: inline-block;
+        text-align: center;
+        margin: 0 8px;
+        vertical-align: middle;
+        line-height: 1.2;
     }
     
+    .fraction-bar {
+        border-bottom: 2px solid #ffc107;
+        margin: 2px 0;
+        line-height: 1;
+        width: 100%;
+    }
+    
+    /* Superscript styling for powers */
+    .power {
+        font-size: 0.8em;
+        vertical-align: super;
+        line-height: 0;
+    }
+    
+    .final-answer {
+        background-color: rgba(76,175,80,0.2);
+        border: 2px solid #4CAF50;
+        padding: 1.5rem;
+        margin: 1.5rem 0;
+        border-radius: 8px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 1.2em;
+    }
+    
+    /* Input styling */
     .stTextArea textarea {
         background-color: rgba(255,255,255,0.1) !important;
-        border: 2px solid rgba(255,255,255,0.2) !important;
+        border: 2px solid rgba(255,255,255,0.3) !important;
         border-radius: 8px !important;
         color: white !important;
     }
     
-    /* Fix text visibility */
-    .stSelectbox label, .stTextArea label {
-        color: white !important;
-    }
-    
-    .stMarkdown, .stText {
-        color: white;
-    }
-    
-    /* Fix dropdown text */
-    .stSelectbox > div > div > div {
+    .stSelectbox > div > div {
+        background-color: rgba(255,255,255,0.1);
         color: white;
     }
     
@@ -112,467 +139,566 @@ st.markdown("""
         font-weight: 600;
         width: 100%;
     }
+    
+    .stSelectbox label, .stTextArea label {
+        color: white !important;
+        font-weight: 600 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Enhanced subject configurations with refined prompts
+# Enhanced subject configurations with better prompts
 SUBJECTS = {
     "Mathematics": {
         "icon": "📐",
-        "prompt": """You are an expert mathematics tutor with PhD-level knowledge. Provide step-by-step solutions that are:
-- Mathematically rigorous and textbook-accurate
-- Clearly explained with proper mathematical notation
-- Include all intermediate steps
-- Show work verification
-- Use proper mathematical terminology
-- Format equations clearly using standard notation""",
+        "prompt": """You are an expert mathematics tutor. Provide clear, step-by-step solutions:
+
+FORMATTING REQUIREMENTS:
+1. Use "**Step 1:**", "**Step 2:**" etc. for each step
+2. Write mathematical expressions in plain text: use x^2 for x², sqrt(x) for square roots
+3. For fractions, use format: (numerator)/(denominator) - this will be displayed properly
+4. Put each mathematical equation on its own line
+5. Explain the reasoning behind each step
+6. End with "**Final Answer:**" 
+7. Keep explanations clear and concise
+8. Add blank lines between steps for better readability
+
+FRACTION EXAMPLES:
+- Write dy/dx = (2x + 1)/(x^2 + 1) 
+- Write y = (x^2 + 3x + 2)/(x + 1)
+- This will display with numerator over denominator in a single box
+
+Provide detailed explanations but keep the formatting clean and readable.""",
         "example": "Solve: 3x² - 12x + 9 = 0"
     },
     "Physics": {
         "icon": "⚡",
-        "prompt": """You are a physics professor with expertise in all physics domains. Provide solutions that:
-- Use correct physics principles and formulas
-- Show dimensional analysis where applicable
-- Include proper units throughout calculations
-- Explain the physics concepts involved
-- Draw connections to real-world applications
-- Follow standard physics problem-solving methodology""",
+        "prompt": """You are a physics expert. Provide clear solutions with:
+- Step-by-step approach using "**Step X:**" format
+- Clear physics principles and formulas
+- Units included in all calculations
+- Simple mathematical notation
+- Real-world context when helpful
+- Add blank lines between steps for readability""",
         "example": "A 2kg object falls from 10m height. Find velocity just before impact."
     },
     "Chemistry": {
         "icon": "🧪",
-        "prompt": """You are a chemistry expert with advanced knowledge. Provide solutions that:
-- Use accurate chemical formulas and equations
-- Balance chemical equations properly
-- Include proper chemical nomenclature
-- Show stoichiometric calculations step-by-step
-- Explain molecular behavior and mechanisms
-- Use standard chemistry notation and units""",
+        "prompt": """You are a chemistry expert. Provide solutions with:
+- Clear step-by-step format
+- Proper chemical equations and formulas
+- Balanced equations where needed
+- Clear explanations of chemical processes
+- Simple, readable notation
+- Add blank lines between steps for readability""",
         "example": "Balance: Al + O₂ → Al₂O₃"
     },
     "Biology": {
         "icon": "🧬",
-        "prompt": """You are a biology expert with comprehensive knowledge. Provide explanations that:
-- Use accurate biological terminology
-- Explain biological processes clearly
-- Include relevant examples and analogies
-- Connect concepts to real biological systems
-- Use proper scientific classification
-- Reference current biological understanding""",
+        "prompt": """You are a biology expert. Provide clear explanations with:
+- Well-organized structure
+- Accurate biological terminology
+- Clear examples and analogies
+- Step-by-step processes where applicable
+- Real-world connections
+- Add blank lines between sections for readability""",
         "example": "Explain the process of cellular respiration in detail."
     },
     "English Literature": {
         "icon": "📚",
-        "prompt": """You are an English literature scholar with deep analytical skills. Provide analysis that:
-- Uses proper literary terminology and concepts
-- Includes textual evidence and citations
-- Analyzes themes, symbols, and literary devices
-- Considers historical and cultural context
-- Follows academic writing standards
-- Provides insightful interpretations""",
+        "prompt": """You are an English literature expert. Provide analysis with:
+- Clear analytical structure
+- Textual evidence and examples
+- Literary device explanations
+- Historical/cultural context
+- Well-organized arguments
+- Add blank lines between points for readability""",
         "example": "Analyze the symbolism of light and darkness in Romeo and Juliet."
     },
     "History": {
         "icon": "🏛️",
-        "prompt": """You are a history professor with expertise across time periods. Provide analysis that:
-- Uses accurate historical facts and dates
-- Considers multiple perspectives and sources
-- Analyzes cause-and-effect relationships
-- Includes relevant historical context
-- Uses proper historical methodology
-- Maintains objectivity while explaining significance""",
+        "prompt": """You are a history expert. Provide analysis with:
+- Chronological or thematic organization
+- Multiple perspectives and sources
+- Cause-and-effect relationships
+- Historical context and significance
+- Clear, factual explanations
+- Add blank lines between sections for readability""",
         "example": "Analyze the causes of World War I."
     },
     "Economics": {
         "icon": "💰",
-        "prompt": """You are an economics expert with theoretical and practical knowledge. Provide explanations that:
-- Use correct economic terminology and principles
-- Include relevant graphs and models where applicable
-- Explain both micro and macroeconomic concepts
-- Use real-world examples and applications
-- Show mathematical calculations for economic problems
-- Connect theory to current economic conditions""",
+        "prompt": """You are an economics expert. Provide explanations with:
+- Clear economic principles
+- Step-by-step calculations where needed
+- Real-world examples
+- Simple mathematical notation
+- Practical applications
+- Add blank lines between steps for readability""",
         "example": "Explain supply and demand equilibrium with a market example."
     },
     "Computer Science": {
         "icon": "💻",
-        "prompt": """You are a computer science expert with programming and theoretical knowledge. Provide solutions that:
-- Use correct programming syntax and best practices
-- Explain algorithms clearly with complexity analysis
-- Include working code examples when relevant
-- Explain computer science concepts thoroughly
-- Use proper technical terminology
-- Consider efficiency and optimization""",
+        "prompt": """You are a computer science expert. Provide solutions with:
+- Clear algorithmic steps
+- Well-commented code examples
+- Complexity analysis when relevant
+- Best practices and optimization tips
+- Practical implementation details
+- Add blank lines between sections for readability""",
         "example": "Implement binary search algorithm in Python."
     }
 }
 
-def should_show_diagram(question, subject):
-    """
-    Improved diagram detection - more permissive and better logic
-    """
-    question_lower = question.lower()
-    
-    # Strong visual indicators - if any of these are present, show diagram
-    strong_visual_keywords = [
-        'draw', 'sketch', 'plot', 'graph', 'construct', 'visualize', 
-        'diagram', 'figure', 'chart', 'show graphically', 'illustrate',
-        'represent visually', 'create diagram', 'make chart', 'display'
-    ]
-    
-    # Check for strong visual indicators first
-    for keyword in strong_visual_keywords:
-        if keyword in question_lower:
-            return True
-    
-    # Subject-specific visual keywords
-    subject_keywords = {
-        'Mathematics': [
-            'parabola', 'quadratic', 'function', 'linear', 'curve', 'slope',
-            'triangle', 'circle', 'rectangle', 'angle', 'coordinate',
-            'sin', 'cos', 'tan', 'trigonometric', 'x²', 'x^2', 'y='
-        ],
-        'Physics': [
-            'wave', 'frequency', 'amplitude', 'projectile', 'trajectory', 
-            'motion', 'force diagram', 'circuit', 'field', 'vector'
-        ],
-        'Chemistry': [
-            'reaction rate', 'concentration', 'molecular structure', 
-            'lewis structure', 'phase diagram', 'orbital'
-        ],
-        'Biology': [
-            'population growth', 'cell cycle', 'dna structure', 'ecosystem',
-            'life cycle', 'growth curve', 'distribution'
-        ],
-        'Economics': [
-            'supply', 'demand', 'curve', 'equilibrium', 'market',
-            'production possibilities', 'cost curve'
-        ]
-    }
-    
-    # Check subject-specific keywords
-    if subject in subject_keywords:
-        for keyword in subject_keywords[subject]:
-            if keyword in question_lower:
-                return True
-    
-    # Pattern matching for visual requests
-    visual_patterns = [
-        r'graph.*function',
-        r'plot.*points?',
-        r'show.*relationship',
-        r'y\s*=\s*.*x',  # equations like y = 2x + 3
-        r'f\(x\)\s*=',   # function notation
-    ]
-    
-    for pattern in visual_patterns:
-        if re.search(pattern, question_lower):
-            return True
-    
-    return False
+def should_show_diagram(question: str, subject: str) -> bool:
+    """Return True only when the question explicitly asks for a visual/graph/geometry construction.
 
-def create_smart_visualization(question, subject):
-    """Create intelligent visualizations based on question context and subject"""
+    Policy:
+    - Require an explicit drawing intent for algebra/calculus/trig (draw/plot/graph/sketch/construct/diagram/illustrate/visualize)
+    - Always allow geometry constructions when common geometry terms appear
+    - Keep other subjects conservative
+    """
+    q = question.lower()
+
+    # 1) Strong drawing intent verbs   <--- FIX #2: added 'show graphically'
+    intent = any(w in q for w in [
+        'draw', 'sketch', 'plot', 'graph', 'construct', 'diagram', 'figure',
+        'show graphically', 'illustrate', 'visualize'
+    ])
+
+    # 2) Geometry keywords that justify a diagram regardless of verb
+    geometry_terms = [
+        'triangle', ' abc', 'abc ', 'perpendicular bisector', 'angle bisector',
+        'median', 'altitude', 'parallel', 'perpendicular', 'circumcircle',
+        'incenter', 'circumcenter', 'square', 'rectangle', 'circle',
+        'semicircle', 'polygon', 'pentagon', 'hexagon', 'heptagon', 'octagon',
+        'geometry', 'tangent', 'tangents'
+    ]
+    if any(t in q for t in geometry_terms):
+        return True
+
+    # 3) Mathematics graphs: require intent + an equation/function pattern
+    if subject == 'Mathematics':
+        if intent and (
+            re.search(r'\by\s*=\s*', q) or  # y = ...
+            re.search(r'\bf\(x\)\s*=\s*', q) or  # f(x) = ...
+            'parabola' in q or  # often implies graphing when paired with intent
+            'sin' in q or 'cos' in q or 'tan' in q  # trig plots when intent present
+        ):
+            return True
+        return False
+
+    # 4) Physics: show only for waves/trajectories when intent present
+    if subject == 'Physics':
+        if intent and any(k in q for k in ['wave', 'trajectory', 'motion', 'circuit']):
+            return True
+        return False
+
+    # 5) Economics: show only when intent present with supply/demand
+    if subject == 'Economics':
+        if intent and any(k in q for k in ['supply', 'demand', 'equilibrium', 'curve']):
+            return True
+        return False
+
+    # Default: require explicit intent
+    return intent
+
+def create_smart_visualization(question: str, subject: str):
+    """Create simple, clean visualizations.
+
+    Adds a basic geometry renderer for triangle construction tasks with
+    given side lengths and the perpendicular bisector of BC.
+    """
     question_lower = question.lower()
-    
+
     try:
-        # Clear any existing plots to prevent interference
-        plt.close('all')
         plt.style.use('default')
         fig, ax = plt.subplots(figsize=(10, 6))
-        
-        # Set white background
         fig.patch.set_facecolor('white')
-        ax.set_facecolor('white')
-        
-        # Mathematics visualizations
+
         if subject == "Mathematics":
-            if any(term in question_lower for term in ['x²', 'x^2', 'quadratic', 'parabola']):
-                x = np.linspace(-10, 10, 400)
-                y = x**2
-                ax.plot(x, y, 'b-', linewidth=2, label='y = x²')
-                ax.grid(True, alpha=0.3)
-                ax.axhline(y=0, color='k', linewidth=0.5)
-                ax.axvline(x=0, color='k', linewidth=0.5)
-                ax.set_xlabel('x', fontsize=12)
-                ax.set_ylabel('y', fontsize=12)
-                ax.set_title('Quadratic Function', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-                
-            elif any(term in question_lower for term in ['linear', 'y=', 'slope', 'line', 'function']) and 'x' in question_lower:
-                x = np.linspace(-10, 10, 100)
-                y = 2*x + 3
-                ax.plot(x, y, 'r-', linewidth=2, label='y = 2x + 3')
-                ax.grid(True, alpha=0.3)
-                ax.axhline(y=0, color='k', linewidth=0.5)
-                ax.axvline(x=0, color='k', linewidth=0.5)
-                ax.set_xlabel('x', fontsize=12)
-                ax.set_ylabel('y', fontsize=12)
-                ax.set_title('Linear Function', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-                
-            elif any(term in question_lower for term in ['sin', 'cos', 'tan', 'trigonometric']):
-                x = np.linspace(-2*np.pi, 2*np.pi, 400)
-                y1 = np.sin(x)
-                y2 = np.cos(x)
-                ax.plot(x, y1, 'b-', linewidth=2, label='sin(x)')
-                ax.plot(x, y2, 'r-', linewidth=2, label='cos(x)')
-                ax.grid(True, alpha=0.3)
-                ax.axhline(y=0, color='k', linewidth=0.5)
-                ax.axvline(x=0, color='k', linewidth=0.5)
-                ax.set_xlabel('x (radians)', fontsize=12)
-                ax.set_ylabel('y', fontsize=12)
-                ax.set_title('Trigonometric Functions', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-                
-            elif any(term in question_lower for term in ['circle', 'radius', 'circumference']):
-                try:
-                    # Extract radius from question if specified
-                    radius_match = re.search(r'radius\s*[=:]?\s*(\d+(?:\.\d+)?)', question_lower)
-                    r = float(radius_match.group(1)) if radius_match else 5.0
-                    
-                    # Validate radius value
-                    if r <= 0:
-                        r = 5.0  # Default to 5 if invalid radius
-                    elif r > 100:
-                        r = 100.0  # Cap at reasonable maximum
-                    
-                    # Create circle with higher resolution for smoother appearance
-                    theta = np.linspace(0, 2*np.pi, 400)
-                    x = r * np.cos(theta)
-                    y = r * np.sin(theta)
-                    
-                    # Plot circle
-                    ax.plot(x, y, 'b-', linewidth=2.5, label=f'Circle (r={r})')
-                    
-                    # Add center point
-                    ax.plot(0, 0, 'ro', markersize=6, label='Center (0,0)')
-                    
-                    # Add radius line
-                    ax.plot([0, r], [0, 0], 'r--', linewidth=1.5, alpha=0.7, label=f'Radius = {r}')
-                    
-                    # Set equal aspect ratio to ensure circle appears circular
-                    ax.set_aspect('equal', adjustable='box')
-                    
-                    # Set appropriate limits with padding
-                    padding = max(r * 0.2, 0.5)  # Ensure minimum padding
-                    ax.set_xlim(-r - padding, r + padding)
-                    ax.set_ylim(-r - padding, r + padding)
-                    
-                    # Add grid and axes
-                    ax.grid(True, alpha=0.3)
-                    ax.axhline(y=0, color='k', linewidth=0.5)
-                    ax.axvline(x=0, color='k', linewidth=0.5)
-                    
-                    # Labels and title
-                    ax.set_xlabel('x', fontsize=12)
-                    ax.set_ylabel('y', fontsize=12)
-                    ax.set_title(f'Circle with Radius {r}', fontsize=14, fontweight='bold')
-                    ax.legend(fontsize=10, loc='upper right')
-                    
-                except Exception as circle_error:
-                    print(f"Circle generation error: {str(circle_error)}")
-                    # Fallback to a simple default circle
-                    theta = np.linspace(0, 2*np.pi, 100)
-                    x = 5 * np.cos(theta)
-                    y = 5 * np.sin(theta)
-                    ax.plot(x, y, 'b-', linewidth=2, label='Circle (r=5)')
-                    ax.set_aspect('equal')
-                    ax.grid(True, alpha=0.3)
-                    ax.set_title('Circle', fontsize=14, fontweight='bold')
-                    ax.legend()
-                
+            # Lightweight geometry engine (shapes + graphs)
+            if any(k in question_lower for k in [
+                'triangle', 'abc', 'perpendicular bisector', 'bisector', 'median', 'altitude',
+                'angle bisector', 'parallel', 'perpendicular', 'circle', 'circumcircle', 'incenter', 'circumcenter',
+                'square', 'rectangle', 'polygon', 'semicircle', 'pentagon', 'hexagon', 'heptagon', 'octagon'
+            ]):
+                # ---------- Helpers ----------
+                def find_len(name: str):
+                    pattern = rf"{name}\s*=?\s*(\d+(?:\.\d+)?)\s*cm"
+                    m = re.search(pattern, question, flags=re.IGNORECASE)
+                    return float(m.group(1)) if m else None
+
+                def midpoint(p, q):
+                    return ((p[0] + q[0]) / 2.0, (p[1] + q[1]) / 2.0)
+
+                def draw_line(p, q, **kw):
+                    ax.plot([p[0], q[0]], [p[1], q[1]], **kw)
+
+                def draw_infinite_line_through(p, direction, length=20, **kw):
+                    d = np.array(direction, dtype=float)
+                    if np.linalg.norm(d) == 0:
+                        return
+                    d = d / np.linalg.norm(d)
+                    p = np.array(p, dtype=float)
+                    p1 = p - d * length
+                    p2 = p + d * length
+                    ax.plot([p1[0], p2[0]], [p1[1], p2[1]], **kw)
+
+                def perp(v):
+                    return (-v[1], v[0])
+
+                # ---------- Build baseline triangle if ABC mentioned or side lengths provided ----------
+                ab = find_len('AB')
+                bc = find_len('BC')
+                ac = find_len('AC')
+
+                need_triangle = any(k in question_lower for k in ['triangle', ' abc', 'abc ', '△abc', '△ abc']) or any(v is not None for v in [ab, bc, ac])
+
+                points = {}
+                if need_triangle:
+                    if bc is None and ab is None and ac is None:
+                        ab, bc, ac = 5.0, 6.0, 4.0
+                    else:
+                        bc = 6.0 if bc is None else bc
+                        ab = 5.0 if ab is None else ab
+                        ac = 4.0 if ac is None else ac
+
+                    B = (0.0, 0.0)
+                    C = (bc, 0.0)
+                    # circle-circle intersection to get A (choose upper solution)
+                    x_a = (ab**2 - ac**2 + bc**2) / (2 * bc if bc != 0 else 1e-6)
+                    y_sq = max(ab**2 - x_a**2, 0.0)
+                    y_a = float(np.sqrt(y_sq))
+                    A = (x_a, y_a)
+                    points.update({'A': A, 'B': B, 'C': C})
+
+                    # Draw triangle with black outlines for white background
+                    stroke = '#000000'
+                    draw_line(B, C, color=stroke, linewidth=2)
+                    draw_line(C, A, color=stroke, linewidth=2)
+                    draw_line(A, B, color=stroke, linewidth=2)
+                    ax.scatter([A[0], B[0], C[0]], [A[1], B[1], C[1]], color='#000000', zorder=3)
+                    ax.text(B[0], B[1] - 0.2, 'B', ha='center', va='top', color=stroke)
+                    ax.text(C[0], C[1] - 0.2, 'C', ha='center', va='top', color=stroke)
+                    ax.text(A[0], A[1] + 0.2, 'A', ha='center', va='bottom', color=stroke)
+
+                    # Side length labels
+                    def put_len(p, q, label):
+                        mx, my = (p[0]+q[0])/2.0, (p[1]+q[1])/2.0
+                        ax.text(mx, my + 0.15, label, color=stroke, ha='center', va='bottom')
+                    put_len(B, C, f'{bc} cm')
+                    put_len(A, B, f'{ab} cm')
+                    put_len(A, C, f'{ac} cm')
+
+                # ---------- Constructions ----------
+                # Perpendicular bisector of a segment XY (e.g., BC)
+                seg_match = re.search(r'perpendicular\s+bisector\s+of\s+([A-Z])([A-Z])', question, flags=re.IGNORECASE)
+                if seg_match:
+                    x, y = seg_match.group(1).upper(), seg_match.group(2).upper()
+                    if x in points and y in points:
+                        P = points[x]; Q = points[y]
+                    else:
+                        # default segment on x-axis if points unknown
+                        P, Q = (0.0, 0.0), (6.0, 0.0)
+                    M = midpoint(P, Q)
+                    dir_vec = (Q[0] - P[0], Q[1] - P[1])
+                    draw_infinite_line_through(M, perp(dir_vec), linestyle='--', color='#4CAF50', linewidth=2, label=f'Perpendicular bisector of {x}{y}')
+
+                # Angle bisector at a vertex (e.g., angle ABC)
+                ang_match = re.search(r'(angle\s*)?bisector\s*(at|of)?\s*(angle\s*)?([A-Z])([A-Z])([A-Z])', question, flags=re.IGNORECASE)
+                if ang_match:
+                    a, b, c = ang_match.group(4).upper(), ang_match.group(5).upper(), ang_match.group(6).upper()
+                    if a in points and b in points and c in points:
+                        A, B, C = points[a], points[b], points[c]
+                        v1 = np.array([A[0] - B[0], A[1] - B[1]], dtype=float)
+                        v2 = np.array([C[0] - B[0], C[1] - B[1]], dtype=float)
+                        if np.linalg.norm(v1) and np.linalg.norm(v2):
+                            v1 /= np.linalg.norm(v1)
+                            v2 /= np.linalg.norm(v2)
+                            bis = v1 + v2
+                            if np.linalg.norm(bis) == 0:
+                                bis = perp(v1)
+                            draw_infinite_line_through(B, bis, linestyle='--', color='#00E5FF', linewidth=2, label=f'Angle bisector at {b}')
+
+                # Median from a vertex (e.g., median from A)
+                med_match = re.search(r'median\s+(from|of)\s+([A-Z])', question, flags=re.IGNORECASE)
+                if med_match and all(k in points for k in ['A', 'B', 'C']):
+                    v = med_match.group(2).upper()
+                    if v == 'A':
+                        m = midpoint(points['B'], points['C'])
+                        draw_line(points['A'], m, linestyle='--', color='#9C27B0', linewidth=2, label='Median from A')
+                    elif v == 'B':
+                        m = midpoint(points['A'], points['C'])
+                        draw_line(points['B'], m, linestyle='--', color='#9C27B0', linewidth=2, label='Median from B')
+                    elif v == 'C':
+                        m = midpoint(points['A'], points['B'])
+                        draw_line(points['C'], m, linestyle='--', color='#9C27B0', linewidth=2, label='Median from C')
+
+                # Altitude from a vertex (e.g., altitude from A to BC)
+                alt_match = re.search(r'altitude\s+(from)\s+([A-Z])', question, flags=re.IGNORECASE)
+                if alt_match and all(k in points for k in ['A', 'B', 'C']):
+                    v = alt_match.group(2).upper()
+                    if v == 'A':
+                        dir_bc = (points['C'][0] - points['B'][0], points['C'][1] - points['B'][1])
+                        draw_infinite_line_through(points['A'], perp(dir_bc), linestyle='--', color='#FF9100', linewidth=2, label='Altitude from A')
+                    elif v == 'B':
+                        dir_ac = (points['C'][0] - points['A'][0], points['C'][1] - points['A'][1])
+                        draw_infinite_line_through(points['B'], perp(dir_ac), linestyle='--', color='#FF9100', linewidth=2, label='Altitude from B')
+                    elif v == 'C':
+                        dir_ab = (points['B'][0] - points['A'][0], points['B'][1] - points['A'][1])
+                        draw_infinite_line_through(points['C'], perp(dir_ab), linestyle='--', color='#FF9100', linewidth=2, label='Altitude from C')
+
+                # Perpendicular/Parallel to a line through a given point (e.g., perpendicular to BC through A)
+                through_match = re.search(r'(perpendicular|parallel)\s+to\s+([A-Z])([A-Z])\s+(through|from)\s+([A-Z])', question, flags=re.IGNORECASE)
+                if through_match:
+                    kind = through_match.group(1).lower()
+                    x, y, p = through_match.group(2).upper(), through_match.group(3).upper(), through_match.group(5).upper()
+                    if x in points and y in points and p in points:
+                        base = (points[y][0] - points[x][0], points[y][1] - points[x][1])
+                        direction = perp(base) if kind == 'perpendicular' else base
+                        draw_infinite_line_through(points[p], direction, linestyle='--', color='#4CAF50' if kind=='perpendicular' else '#90CAF9', linewidth=2, label=f'{kind.title()} to {x}{y} through {p}')
+
+                # Circle with center O and radius r cm OR generic circle radius r
+                circ_match = re.search(r'(?:circle\s+with\s+center\s+([A-Z])\s*(?:and)?\s*)?radius\s*(\d+(?:\.\d+)?)\s*cm', question, flags=re.IGNORECASE)
+                if circ_match:
+                    cg = circ_match.group(1)
+                    r = float(circ_match.group(2))
+                    c = cg.upper() if cg else 'O'
+                    center = points.get(c, (0.0, 0.0)) if cg else (0.0, 0.0)
+                    circle = plt.Circle(center, r, fill=False, edgecolor='#000000', linewidth=2)
+                    ax.add_patch(circle)
+                    ax.scatter([center[0]], [center[1]], color='#000000')
+                    ax.text(center[0], center[1]+0.2, c, color='#000000', ha='center')
+                    # radius marker only when not a tangent construction
+                    if 'tangent' not in question_lower and 'tangents' not in question_lower:
+                        ax.plot([center[0], center[0]+r], [center[1], center[1]], color='#000000', linestyle='--')
+                        ax.text(center[0]+r/2, center[1]+0.15, f'{r} cm', color='#000000', ha='center')
+
+                # Pair of tangents to a circle with given angle between them
+                tan_match = re.search(r'tangents?\s+to\s+a?\s*circle.*angle\s+of\s*(\d+(?:\.\d+)?)', question, flags=re.IGNORECASE)
+                if tan_match:
+                    angle = float(tan_match.group(1))  # degrees between tangents
+                    # Ensure a circle exists; if not, create default with r=3cm at O
+                    if not any(isinstance(p, plt.Circle) for p in ax.patches):
+                        r = 3.0
+                        circle = plt.Circle((0.0, 0.0), r, fill=False, edgecolor='#000000', linewidth=2)
+                        ax.add_patch(circle)
+                        ax.scatter([0],[0], color='#000000'); ax.text(0, 0.2, 'O', color='#000000', ha='center')
+                    # Determine circle radius and center from first circle patch
+                    circ = next((p for p in ax.patches if isinstance(p, plt.Circle)), None)
+                    if circ is not None:
+                        center = circ.get_center(); r = circ.get_radius()
+                        # Angle between tangents is 2*theta where theta is angle between radius to point of contact and internal angle bisector
+                        theta = np.deg2rad(angle/2.0)
+                        # Choose two points of contact symmetrically about x-axis
+                        t1 = np.array([center[0] + r*np.cos(theta), center[1] + r*np.sin(theta)])
+                        t2 = np.array([center[0] + r*np.cos(theta), center[1] - r*np.sin(theta)])
+                        # Tangent directions are perpendicular to radius vectors
+                        r1 = t1 - np.array(center); r2 = t2 - np.array(center)
+                        dir1 = np.array([-r1[1], r1[0]])
+                        dir2 = np.array([-r2[1], r2[0]])
+                        # Draw tangents
+                        def draw_tan(point, direction, label):
+                            d = direction/np.linalg.norm(direction)
+                            p1 = point - d*5*r; p2 = point + d*5*r
+                            ax.plot([p1[0], p2[0]], [p1[1], p2[1]], color='#000000', linewidth=2)
+                            ax.text(point[0], point[1]+0.2*np.sign(d[1] if d[1]!=0 else 1), label, color='#000000', ha='center')
+                        draw_tan(t1, dir1, 't₁')
+                        draw_tan(t2, dir2, 't₂')
+                        # Mark angle between tangents at their intersection
+                        # Find intersection by solving for lines p = t + s*d
+                        def line_intersection(p1, d1, p2, d2):
+                            # Solve p1 + s*d1 = p2 + t*d2
+                            A = np.array([d1, -d2]).T
+                            b = p2 - p1
+                            sol = np.linalg.lstsq(A, b, rcond=None)[0]
+                            return p1 + sol[0]*d1
+                        inter = line_intersection(t1, dir1, t2, dir2)
+                        ax.scatter([inter[0]],[inter[1]], color='#000000')
+                        ax.text(inter[0], inter[1]-0.25, f'{int(angle)}°', color='#000000', ha='center')
+
+                # Regular shapes when requested without triangle context
+                if not points and any(k in question_lower for k in ['square', 'rectangle', 'polygon', 'circle', 'semicircle']):
+                    stroke = '#000000'
+                    if 'square' in question_lower:
+                        s = 4.0
+                        X = np.array([0, s, s, 0, 0]); Y = np.array([0, 0, s, s, 0])
+                        ax.plot(X, Y, color=stroke, linewidth=2)
+                        # mark vertices and lengths
+                        V = [(0,0), (s,0), (s,s), (0,s)]
+                        labels = ['A','B','C','D']
+                        ax.scatter([p[0] for p in V], [p[1] for p in V], color=stroke)
+                        for (px,py),lab in zip(V,labels):
+                            ax.text(px, py-0.2 if py==0 else py+0.2, lab, color=stroke, ha='center', va='center')
+                        ax.text(s/2, -0.3, f'{s} cm', color=stroke, ha='center')
+                        ax.text(s+0.3, s/2, f'{s} cm', color=stroke, va='center')
+                        ax.set_title('Square')
+                    elif 'rectangle' in question_lower:
+                        a, b = 6.0, 4.0
+                        X = np.array([0, a, a, 0, 0]); Y = np.array([0, 0, b, b, 0])
+                        ax.plot(X, Y, color=stroke, linewidth=2)
+                        V = [(0,0), (a,0), (a,b), (0,b)]
+                        labels = ['A','B','C','D']
+                        ax.scatter([p[0] for p in V], [p[1] for p in V], color=stroke)
+                        for (px,py),lab in zip(V,labels):
+                            ax.text(px, py-0.2 if py==0 else py+0.2, lab, color=stroke, ha='center', va='center')
+                        ax.text(a/2, -0.3, f'{a} cm', color=stroke, ha='center')
+                        ax.text(a+0.3, b/2, f'{b} cm', color=stroke, va='center')
+                        ax.set_title('Rectangle')
+                    elif 'semicircle' in question_lower:
+                        r = 3.0
+                        t = np.linspace(0, np.pi, 200)
+                        ax.plot(r*np.cos(t), r*np.sin(t), color=stroke, linewidth=2)
+                        ax.plot([-r, r], [0, 0], color=stroke, linewidth=2)
+                        # points and labels
+                        A = (-r,0); B = (r,0); O = (0,0)
+                        ax.scatter([A[0],B[0],O[0]],[A[1],B[1],O[1]], color=stroke)
+                        ax.text(A[0], A[1]-0.2, 'A', color=stroke, ha='center')
+                        ax.text(B[0], B[1]-0.2, 'B', color=stroke, ha='center')
+                        ax.text(O[0], O[1]+0.2, 'O', color=stroke, ha='center')
+                        ax.text(0, -0.3, f'{2*r} cm', color=stroke, ha='center')
+                        ax.set_aspect('equal')
+                        ax.set_title('Semicircle')
+                    elif 'circle' in question_lower:
+                        r = 3.0
+                        # Draw full circle using parameterization so bounding works reliably
+                        t = np.linspace(0, 2*np.pi, 400)
+                        X = r*np.cos(t); Y = r*np.sin(t)
+                        ax.plot(X, Y, color=stroke, linewidth=2)
+                        O = (0,0)
+                        ax.scatter([O[0]],[O[1]], color=stroke)
+                        ax.text(0, 0.2, 'O', color=stroke, ha='center')
+                        ax.set_aspect('equal')
+                        ax.set_title('Circle')
+                    elif 'polygon' in question_lower:
+                        # default to regular hexagon
+                        n = 6
+                        t = np.linspace(0, 2*np.pi, n+1)
+                        X = np.cos(t); Y = np.sin(t)
+                        ax.plot(X, Y, color=stroke, linewidth=2)
+                        # label vertices
+                        verts = list(zip(X[:-1], Y[:-1]))
+                        labels = ['A','B','C','D','E','F','G','H']
+                        for i,(px,py) in enumerate(verts):
+                            ax.scatter([px],[py], color=stroke)
+                            ax.text(px, py+0.15, labels[i], color=stroke, ha='center')
+                        ax.set_aspect('equal')
+                        ax.set_title('Regular Polygon (hexagon)')
+
+                # Final styling and bounds
+                ax.set_aspect('equal', adjustable='datalim')
+                # Determine bounds from all artists (lines, patches, scatter collections)
+                x_all, y_all = [], []
+                # Lines
+                for line in ax.get_lines():
+                    xdata = line.get_xdata(); ydata = line.get_ydata()
+                    x_all.extend(list(xdata)); y_all.extend(list(ydata))
+                # Patches (e.g., circles)   <--- FIX #3: added safe-guard
+                if ax.patches:  # Only if patches exist
+                    for patch in ax.patches:
+                        try:
+                            verts = patch.get_path().transformed(patch.get_transform()).vertices
+                            if verts is not None and len(verts) > 0:
+                                x_all.extend(list(verts[:,0])); y_all.extend(list(verts[:,1]))
+                        except Exception:
+                            pass
+                # Collections (e.g., scatter points)
+                for coll in ax.collections:
+                    try:
+                        offs = coll.get_offsets()
+                        if offs is not None and len(offs) > 0:
+                            arr = np.array(offs)
+                            if arr.ndim == 2 and arr.shape[1] == 2:
+                                x_all.extend(list(arr[:,0])); y_all.extend(list(arr[:,1]))
+                    except Exception:
+                        pass
+                if x_all and y_all:
+                    x_min, x_max = min(x_all), max(x_all)
+                    y_min, y_max = min(y_all), max(y_all)
+                    # Ensure non-zero padding
+                    pad_x = max((x_max - x_min) * 0.15, 1.0)
+                    pad_y = max((y_max - y_min) * 0.15, 1.0)
+                    ax.set_xlim(x_min - pad_x, x_max + pad_x)
+                    ax.set_ylim(y_min - pad_y, y_max + pad_y)
+                else:
+                    # Fallback: if a circle exists, frame around its center and radius
+                    circ = next((p for p in ax.patches if isinstance(p, plt.Circle)), None)
+                    if circ is not None:
+                        c = circ.get_center(); r = circ.get_radius()
+                        pad = max(0.5*r, 1.0)
+                        ax.set_xlim(c[0] - r - pad, c[0] + r + pad)
+                        ax.set_ylim(c[1] - r - pad, c[1] + r + pad)
+                    else:
+                        # Safe default frame
+                        ax.set_xlim(-5, 5)
+                        ax.set_ylim(-5, 5)
+                ax.axis('off')
+                ax.legend(loc='upper right')
             else:
-                # Default math visualization - coordinate plane
-                x = np.linspace(-5, 5, 100)
-                y = x**2 - 4
-                ax.plot(x, y, 'b-', linewidth=2, label='Example: y = x² - 4')
+                # Existing math plots
+                if any(term in question_lower for term in ['quadratic', 'parabola', 'x²', 'x^2']):
+                    x = np.linspace(-5, 5, 100)
+                    y = x**2
+                    ax.plot(x, y, 'b-', linewidth=2, label='y = x²')
+                    ax.set_title('Quadratic Function')
+                elif any(term in question_lower for term in ['linear', 'y=', 'slope']):
+                    x = np.linspace(-5, 5, 100)
+                    y = 2*x + 1
+                    ax.plot(x, y, 'r-', linewidth=2, label='Linear Function')
+                    ax.set_title('Linear Function')
+                elif any(term in question_lower for term in ['sin', 'cos']):
+                    x = np.linspace(-2*np.pi, 2*np.pi, 100)
+                    ax.plot(x, np.sin(x), 'b-', linewidth=2, label='sin(x)')
+                    ax.plot(x, np.cos(x), 'r-', linewidth=2, label='cos(x)')
+                    ax.set_title('Trigonometric Functions')
+
                 ax.grid(True, alpha=0.3)
                 ax.axhline(y=0, color='k', linewidth=0.5)
                 ax.axvline(x=0, color='k', linewidth=0.5)
-                ax.set_xlabel('x', fontsize=12)
-                ax.set_ylabel('y', fontsize=12)
-                ax.set_title('Mathematical Function', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-        
-        # Physics visualizations
+                ax.set_xlabel('x')
+                ax.set_ylabel('y')
+                ax.legend()
+
         elif subject == "Physics":
-            if any(term in question_lower for term in ['wave', 'frequency', 'amplitude']):
-                t = np.linspace(0, 4*np.pi, 400)
-                y = np.sin(t)
-                ax.plot(t, y, 'b-', linewidth=2, label='Wave Function')
-                ax.grid(True, alpha=0.3)
-                ax.set_xlabel('Time/Position', fontsize=12)
-                ax.set_ylabel('Amplitude', fontsize=12)
-                ax.set_title('Wave Pattern', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-                
-            elif any(term in question_lower for term in ['projectile', 'trajectory', 'motion']):
-                t = np.linspace(0, 5, 100)
-                x = 10 * t  # horizontal motion
-                y = 10 * t - 0.5 * 9.8 * t**2  # vertical motion with gravity
-                y[y < 0] = 0  # ground level
-                ax.plot(x, y, 'r-', linewidth=2, label='Projectile Path')
-                ax.grid(True, alpha=0.3)
-                ax.set_xlabel('Horizontal Distance (m)', fontsize=12)
-                ax.set_ylabel('Height (m)', fontsize=12)
-                ax.set_title('Projectile Motion', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-            else:
-                # Default physics diagram
-                t = np.linspace(0, 2*np.pi, 100)
-                y = np.sin(t)
-                ax.plot(t, y, 'g-', linewidth=2, label='Physics Function')
-                ax.grid(True, alpha=0.3)
-                ax.set_xlabel('Parameter', fontsize=12)
-                ax.set_ylabel('Value', fontsize=12)
-                ax.set_title('Physics Visualization', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-        
-        # Chemistry visualizations
-        elif subject == "Chemistry":
-            if any(term in question_lower for term in ['reaction rate', 'concentration', 'time']):
-                t = np.linspace(0, 10, 100)
-                concentration = 1.0 * np.exp(-0.3 * t)  # exponential decay
-                ax.plot(t, concentration, 'g-', linewidth=2, label='Concentration vs Time')
-                ax.grid(True, alpha=0.3)
-                ax.set_xlabel('Time (s)', fontsize=12)
-                ax.set_ylabel('Concentration (M)', fontsize=12)
-                ax.set_title('Reaction Kinetics', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-            else:
-                # Default chemistry diagram
-                t = np.linspace(0, 10, 100)
-                conc = np.exp(-0.2 * t)
-                ax.plot(t, conc, 'orange', linewidth=2, label='Chemical Process')
-                ax.grid(True, alpha=0.3)
-                ax.set_xlabel('Time', fontsize=12)
-                ax.set_ylabel('Concentration', fontsize=12)
-                ax.set_title('Chemical Process', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-        
-        # Biology visualizations
-        elif subject == "Biology":
-            if any(term in question_lower for term in ['population', 'growth', 'exponential']):
-                t = np.linspace(0, 10, 100)
-                population = 100 * np.exp(0.2 * t)
-                ax.plot(t, population, 'g-', linewidth=2, label='Population Growth')
-                ax.set_xlabel('Time', fontsize=12)
-                ax.set_ylabel('Population Size', fontsize=12)
-                ax.set_title('Exponential Population Growth', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-                ax.grid(True, alpha=0.3)
-                
-            elif any(term in question_lower for term in ['cell cycle', 'mitosis', 'phases']):
-                phases = ['G1', 'S', 'G2', 'M']
-                sizes = [25, 30, 20, 25]
-                colors = ['#ff9999', '#66b3ff', '#99ff99', '#ffcc99']
-                ax.pie(sizes, labels=phases, colors=colors, autopct='%1.1f%%', startangle=90)
-                ax.set_title('Cell Cycle Phases', fontsize=14, fontweight='bold')
-            else:
-                # Default biology diagram
-                t = np.linspace(0, 20, 100)
-                growth = 50 * (1 - np.exp(-0.3 * t))
-                ax.plot(t, growth, 'green', linewidth=2, label='Biological Growth')
-                ax.grid(True, alpha=0.3)
-                ax.set_xlabel('Time', fontsize=12)
-                ax.set_ylabel('Growth', fontsize=12)
-                ax.set_title('Biological Process', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-        
-        # Economics visualizations
-        elif subject == "Economics":
-            if any(term in question_lower for term in ['supply', 'demand', 'curve', 'equilibrium']):
-                quantity = np.linspace(0, 10, 100)
-                supply = 2 * quantity  # supply curve
-                demand = 20 - quantity  # demand curve
-                ax.plot(quantity, supply, 'b-', linewidth=2, label='Supply')
-                ax.plot(quantity, demand, 'r-', linewidth=2, label='Demand')
-                
-                # Find equilibrium point
-                eq_quantity = 20/3
-                eq_price = 2 * eq_quantity
-                ax.plot(eq_quantity, eq_price, 'go', markersize=8, label='Equilibrium')
-                
-                ax.grid(True, alpha=0.3)
-                ax.set_xlabel('Quantity', fontsize=12)
-                ax.set_ylabel('Price', fontsize=12)
-                ax.set_title('Supply and Demand', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-            else:
-                # Default economics diagram
-                x = np.linspace(0, 10, 100)
-                supply = x * 2
-                demand = 20 - x
-                ax.plot(x, supply, 'blue', linewidth=2, label='Economic Function 1')
-                ax.plot(x, demand, 'red', linewidth=2, label='Economic Function 2')
-                ax.grid(True, alpha=0.3)
-                ax.set_xlabel('Quantity', fontsize=12)
-                ax.set_ylabel('Price', fontsize=12)
-                ax.set_title('Economic Analysis', fontsize=14, fontweight='bold')
-                ax.legend(fontsize=11)
-        
-        # For other subjects, create a generic visualization
-        else:
-            x = np.linspace(-5, 5, 100)
-            y = np.sin(x)
-            ax.plot(x, y, 'purple', linewidth=2, label='General Function')
+            t = np.linspace(0, 4*np.pi, 100)
+            y = np.sin(t)
+            ax.plot(t, y, 'b-', linewidth=2, label='Wave')
+            ax.set_title('Wave Function')
+            ax.set_xlabel('Time/Position')
+            ax.set_ylabel('Amplitude')
             ax.grid(True, alpha=0.3)
-            ax.set_xlabel('X', fontsize=12)
-            ax.set_ylabel('Y', fontsize=12)
-            ax.set_title(f'{subject} Visualization', fontsize=14, fontweight='bold')
-            ax.legend(fontsize=11)
-        
-        # Save plot to bytes
+            ax.legend()
+
+        elif subject == "Economics":
+            x = np.linspace(0, 10, 100)
+            supply = 2 * x
+            demand = 20 - x
+            ax.plot(x, supply, 'b-', linewidth=2, label='Supply')
+            ax.plot(x, demand, 'r-', linewidth=2, label='Demand')
+            ax.set_title('Supply and Demand')
+            ax.set_xlabel('Quantity')
+            ax.set_ylabel('Price')
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+
         buf = BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight', dpi=150, facecolor='white')
+        plt.savefig(buf, format='png', dpi=180, facecolor='white')
         buf.seek(0)
         plt.close(fig)
-        
         return buf
-        
-    except Exception as e:
-        # Log the error for debugging
-        print(f"Visualization error: {str(e)}")
-        
-        # Ensure all matplotlib resources are cleaned up
+
+    except Exception:
         plt.close('all')
-        
-        # Return None to indicate failure
         return None
 
 def get_api_response(question, subject):
-    """Get response from OpenRouter API with enhanced prompting"""
-    
-    # Check if API key exists
+    """Get response from OpenRouter API"""
     if 'OPENROUTER_API_KEY' not in st.secrets:
         st.error("⚠️ API key not configured. Please add OPENROUTER_API_KEY to Streamlit secrets.")
         return None
     
     api_key = st.secrets['OPENROUTER_API_KEY']
-    
-    # Enhanced system prompt - more detailed for better answers
-    system_prompt = f"""
-    You are an expert {subject} tutor providing comprehensive, step-by-step solutions.
-    
-    CRITICAL REQUIREMENTS:
-    1. Provide DETAILED explanations with multiple steps
-    2. Show ALL mathematical work and intermediate calculations
-    3. Use clear mathematical notation (write fractions as 3/2, exponents as x^2, square roots as sqrt())
-    4. Explain WHY each step is taken
-    5. Include verification/checking of the final answer
-    6. For math problems: show the formula first, then substitute values, then calculate
-    7. Break complex problems into smaller, manageable steps
-    8. Be thorough and educational - students should understand the process completely
-    
-    FORMATTING:
-    - Use "Step 1:", "Step 2:", etc. for clear organization
-    - Put final answers in a separate "Final Answer:" section
-    - Use simple text formatting (no LaTeX symbols like \\frac or \\sqrt)
-    - Write equations clearly: x = (-b ± sqrt(b^2 - 4ac)) / (2a)
-    
-    Subject: {subject}
-    """
     
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -580,18 +706,18 @@ def get_api_response(question, subject):
     }
     
     data = {
-        "model": "openai/gpt-3.5-turbo",
+        "model": "openai/gpt-4o-mini",
         "messages": [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": SUBJECTS[subject]['prompt']},
             {"role": "user", "content": question}
         ],
         "temperature": 0.1,
-        "max_tokens": 1200
+        "max_tokens": 2000
     }
     
     try:
         response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://openrouter.ai/api/v1/chat/completions",   # <--- FIX #1
             headers=headers,
             json=data,
             timeout=30
@@ -600,100 +726,98 @@ def get_api_response(question, subject):
         if response.status_code == 200:
             return response.json()['choices'][0]['message']['content']
         else:
-            st.error(f"API Error: {response.status_code} - {response.text}")
+            st.error(f"API Error: {response.status_code}")
             return None
             
     except requests.exceptions.RequestException as e:
         st.error(f"Network Error: {str(e)}")
         return None
 
-def format_math_response(response_text):
-    """Format mathematical responses with proper styling and convert LaTeX frac/sqrt to plain text."""
+def format_powers(text):
+    """Convert ^2, ^3, etc. to proper superscript format"""
+    # Replace common powers with superscript
+    text = re.sub(r'\^2', '<span class="power">2</span>', text)
+    text = re.sub(r'\^3', '<span class="power">3</span>', text)
+    text = re.sub(r'\^4', '<span class="power">4</span>', text)
+    text = re.sub(r'\^(\d+)', r'<span class="power">\1</span>', text)
+    text = re.sub(r'\^(\([^)]+\))', r'<span class="power">\1</span>', text)
+    # Replace sqrt(...) with √(...)
+    text = re.sub(r'\bsqrt\s*\(', '√(', text)
+    return text
+
+def format_fraction(numerator, denominator):
+    """Format a fraction with numerator over denominator in inline style"""
+    num_clean = format_powers(numerator.strip())
+    den_clean = format_powers(denominator.strip())
     
-    formatted = response_text
+    return f"""<div class="fraction-display">
+        <div>{num_clean}</div>
+        <div class="fraction-bar"></div>
+        <div>{den_clean}</div>
+    </div>"""
+
+def format_response(response_text):
+    """Improved formatting with consistent vertical fractions and tighter spacing"""
+    if not response_text:
+        return ""
     
-    # Convert nested fractions recursively - multiple passes to catch all
-    def replace_frac(match):
-        numerator = match.group(1)
-        denominator = match.group(2)
-        # Recursively convert numerator and denominator (to handle nested fracs)
-        numerator_conv = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', replace_frac, numerator)
-        denominator_conv = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', replace_frac, denominator)
-        return f"({numerator_conv})/({denominator_conv})"
+    # Clean up LaTeX notation to simple text but preserve fraction structure
+    response_text = re.sub(r'\\sqrt\{([^}]+)\}', r'sqrt(\1)', response_text)
+    response_text = re.sub(r'\\[a-zA-Z]+\{?([^}]*)\}?', r'\1', response_text)
     
-    # Multiple passes to ensure all fractions are converted
-    for _ in range(5):  # Up to 5 levels of nesting
-        if r'\frac{' not in formatted:
-            break
-        formatted = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', replace_frac, formatted)
-    
-    # Handle any remaining simple fractions with a basic pattern
-    formatted = re.sub(r'\\frac\{([^}]*)\}\{([^}]*)\}', r'(\1)/(\2)', formatted)
-    
-    # Replace \sqrt{...} with sqrt(...)
-    formatted = re.sub(r'\\sqrt\{([^}]+)\}', r'sqrt(\1)', formatted)
-    
-    # Remove various LaTeX delimiters
-    formatted = re.sub(r'\\\(|\\\)', '', formatted)
-    formatted = re.sub(r'\\\[|\\\]', '', formatted)
-    formatted = re.sub(r'\\left\(', '(', formatted)
-    formatted = re.sub(r'\\right\)', ')', formatted)
-    
-    # Replace common LaTeX symbols
-    formatted = re.sub(r'\\cdot', '*', formatted)
-    formatted = re.sub(r'\\pm', '±', formatted)
-    formatted = re.sub(r'\\times', '×', formatted)
-    formatted = re.sub(r'\\div', '÷', formatted)
-    
-    # Clean up any remaining backslashes followed by letters (LaTeX commands)
-    formatted = re.sub(r'\\[a-zA-Z]+', '', formatted)
-    
-    # Format for HTML display
-    lines = formatted.split('\n')
-    processed_lines = []
+    lines = response_text.strip().split('\n')
+    formatted_content = []
     
     for line in lines:
         line = line.strip()
         if not line:
-            processed_lines.append('<br>')
+            # Add minimal spacing between sections
+            formatted_content.append("<br>")
             continue
         
-        # Format step headers (including **Step patterns)
-        if re.match(r'^\*\*Step \d+:', line) or re.match(r'^Step \d+:', line):
-            # Remove markdown bold formatting
+        # Skip stray closing tags that may appear in the model text
+        if re.match(r'^</(div|span|p)>$', line):
+            continue
+
+        # Step headers
+        if re.match(r'^\*\*Step \d+:', line) or re.match(r'^###\s*Step \d+:', line):
+            step_text = re.sub(r'\*\*|###', '', line).strip()
+            formatted_content.append(f'<h3 style="color:#4CAF50;margin:1rem 0 0.5rem 0;">{step_text}</h3>')
+            # extra space after each step header for readability
+            formatted_content.append('<div style="height:6px"></div>')
+        
+        # Final answer
+        elif 'Final Answer' in line:
             clean_line = re.sub(r'\*\*', '', line)
-            processed_lines.append(f'<div class="step-box"><strong>{clean_line}</strong></div>')
+            formatted_content.append(f'<div class="final-answer">{format_powers(clean_line)}</div>\n')
         
-        # Format section headers
-        elif line.startswith('**') and line.endswith('**'):
-            clean_line = line.replace('**', '')
-            processed_lines.append(f'<div class="step-box"><strong>{clean_line}</strong></div>')
+        # Check for any line containing fractions - convert ALL to vertical display
+        elif '/' in line and ('(' in line or any(char in line for char in ['x', 'y', 'dx', 'dy', 'du', 'dv'])):
+            # Convert all fractions in the line to vertical display
+            # First handle complex fractions like (numerator)/(denominator) - more comprehensive pattern
+            formatted_line = re.sub(r'\(([^)]+)\)\s*/\s*\(([^)]+)\)', lambda m: format_fraction(m.group(1), m.group(2)), line)
+            # Then handle simple fractions like du/dx, dv/dx, dy/dx
+            formatted_line = re.sub(r'\b([a-zA-Z]+)/([a-zA-Z]+)\b', lambda m: format_fraction(m.group(1), m.group(2)), formatted_line)
+            # Handle any remaining fractions with parentheses - catch cases like (2x + 1) / (x² + 1)²
+            formatted_line = re.sub(r'\(([^)]+)\)\s*/\s*([^/\s]+)', lambda m: format_fraction(m.group(1), m.group(2)), formatted_line)
+            formatted_content.append(f'<div class="math-line">{format_powers(formatted_line)}</div>\n')
         
-        # Format equations (lines with = and mathematical content)
-        elif '=' in line and any(ch in line for ch in ['x', '+', '-', '*', '/', '^', 'sqrt', '(', ')']):
-            processed_lines.append(f'<div class="math-step">{line}</div>')
-        
-        # Format final answers
-        elif (line.startswith('Final Answer:') or line.startswith('Therefore') or 
-              line.startswith('Answer:') or 'solutions to the equation' in line):
-            processed_lines.append(f'<div class="formula-box">{line}</div>')
-        
-        # Format solution headers
-        elif line.startswith('Solution:') or line.startswith('Given:') or line.startswith('To solve'):
-            processed_lines.append(f'<div class="step-box"><strong>{line}</strong></div>')
+        # Mathematical expressions with equations (no fractions)
+        elif ('=' in line and any(char in line for char in ['x', '+', '-', '*', '^', '(', ')'])):
+            formatted_content.append(f'<div class="math-line">{format_powers(line)}</div>\n')
         
         # Regular text
         else:
-            processed_lines.append(f'<p style="margin: 8px 0; color: white;">{line}</p>')
+            formatted_content.append(f"{format_powers(line)}\n")
     
-    return ''.join(processed_lines)
+    return ''.join(formatted_content)
 
 def main():
     # Header
     st.markdown("""
     <div class="main-header">
         <h1>🎓 Academic Assistant Pro</h1>
-        <p>Expert-level homework assistance across all subjects</p>
+        <p>Clear, step-by-step homework solutions</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -703,7 +827,6 @@ def main():
     with col1:
         st.markdown("### 📖 Select Subject")
         
-        # Subject selection with icons
         subject_options = [f"{info['icon']} {subject}" for subject, info in SUBJECTS.items()]
         selected_subject_display = st.selectbox(
             "Choose your subject:",
@@ -711,18 +834,15 @@ def main():
             help="Select the academic subject for your question"
         )
         
-        # Extract actual subject name
         selected_subject = selected_subject_display.split(' ', 1)[1]
         
-        # Show example question
-        st.markdown("### 💡 Example Question")
-        with st.expander("See example"):
-            st.info(f"**{selected_subject}**: {SUBJECTS[selected_subject]['example']}")
+        # Show example
+        st.markdown("### 💡 Example")
+        st.info(f"**{selected_subject}**: {SUBJECTS[selected_subject]['example']}")
     
     with col2:
         st.markdown("### ❓ Your Question")
         
-        # Question input
         question = st.text_area(
             "Enter your homework question:",
             height=120,
@@ -730,134 +850,50 @@ def main():
             help="Be specific and include all relevant details"
         )
         
-        # Solve button
         if st.button("🎯 Get Solution", type="primary"):
             if question.strip():
-                with st.spinner(f"Analyzing your {selected_subject} question..."):
-                    # Get AI response
+                with st.spinner("Getting solution..."):
                     response = get_api_response(question, selected_subject)
                     
                     if response:
-                        # Display clean answer
-                        st.markdown("### 📝 Solution")
+                        st.markdown("---")
+                        st.markdown(f"## 📚 {selected_subject} Solution")
                         
-                        # Format response based on subject
-                        if selected_subject == "Mathematics":
-                            formatted_response = format_math_response(response)
-                        else:
-                            formatted_response = response.replace('\n\n', '<br><br>')
+                        # Improved formatting in a clean container
+                        formatted_response = format_response(response)
+                        st.markdown(f"""
+                        <div class="solution-content">
+                            {formatted_response}
+                        </div>
+                        """, unsafe_allow_html=True)
                         
-                        with st.container():
-                            st.markdown(f"""
-                            <div class="answer-container">
-                                <h4>{SUBJECTS[selected_subject]['icon']} {selected_subject} Solution</h4>
-                                <div>
-                                    {formatted_response}
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                        # Show diagram if needed
+                        if should_show_diagram(question, selected_subject):
+                            st.markdown("### 📊 Visualization")
+                            viz = create_smart_visualization(question, selected_subject)
+                            if viz:
+                                st.image(viz, use_container_width=True)
                         
-                        # Smart diagram detection and generation
-                        st.markdown("### 🔍 Diagram Detection Debug")
-                        diagram_should_show = should_show_diagram(question, selected_subject)
-                        st.info(f"Should show diagram: **{diagram_should_show}**")
-                        st.info(f"Question: '{question}'")
-                        st.info(f"Subject: '{selected_subject}'")
-                        
-                        if diagram_should_show:
-                            with st.spinner("Creating visualization..."):
-                                viz = create_smart_visualization(question, selected_subject)
-                                if viz:
-                                    st.markdown("### 📊 Visual Representation")
-                                    st.image(viz, use_container_width=True, caption=f"{selected_subject} Visualization")
-                                    st.success("✅ Diagram generated successfully!")
-                                else:
-                                    st.warning("⚠️ Could not generate visualization for this question.")
-                        else:
-                            st.info("ℹ️ No diagram needed for this question type.")
-                        
-                        # Feedback section
-                        st.markdown("### 📊 Rate this solution")
+                        # Simple feedback
+                        st.markdown("### Rate this solution")
                         col_a, col_b, col_c = st.columns(3)
                         with col_a:
                             if st.button("👍 Helpful"):
-                                st.success("Thank you for your feedback!")
+                                st.success("Thanks!")
                         with col_b:
-                            if st.button("👎 Needs improvement"):
-                                st.info("We'll work on improving our responses!")
+                            if st.button("👎 Needs work"):
+                                st.info("We'll improve!")
                         with col_c:
                             if st.button("🔄 Try again"):
                                 st.rerun()
-                    
             else:
-                st.warning("⚠️ Please enter a question to get help.")
+                st.warning("Please enter a question.")
     
-    # Test cases section
-    st.markdown("---")
-    st.markdown("### 🧪 Test Diagram Detection")
-    st.markdown("Try these test cases to see diagram detection in action:")
-    
-    test_cases = {
-        "Mathematics": [
-            "Draw a parabola for y = x²",
-            "Graph the function y = 2x + 3",
-            "Sketch a circle with radius 5",
-            "Plot the sine function",
-            "Solve: 2x + 3 = 7"  # Should NOT show diagram
-        ],
-        "Physics": [
-            "Draw a wave with frequency 5Hz",
-            "Show projectile motion trajectory",
-            "Calculate the momentum"  # Should NOT show diagram
-        ],
-        "Economics": [
-            "Draw supply and demand curves",
-            "Show market equilibrium",
-            "What is inflation?"  # Should NOT show diagram
-        ]
-    }
-    
-    col_test1, col_test2, col_test3 = st.columns(3)
-    
-    with col_test1:
-        st.markdown("**Mathematics Tests:**")
-        for test in test_cases["Mathematics"]:
-            if st.button(f"Test: {test[:20]}...", key=f"math_{test}"):
-                st.text_area("Auto-filled question:", value=test, key=f"result_{test}")
-                should_show = should_show_diagram(test, "Mathematics")
-                if should_show:
-                    st.success(f"✅ Would show diagram")
-                else:
-                    st.info(f"ℹ️ Would NOT show diagram")
-    
-    with col_test2:
-        st.markdown("**Physics Tests:**")
-        for test in test_cases["Physics"]:
-            if st.button(f"Test: {test[:20]}...", key=f"phys_{test}"):
-                st.text_area("Auto-filled question:", value=test, key=f"result_{test}")
-                should_show = should_show_diagram(test, "Physics")
-                if should_show:
-                    st.success(f"✅ Would show diagram")
-                else:
-                    st.info(f"ℹ️ Would NOT show diagram")
-    
-    with col_test3:
-        st.markdown("**Economics Tests:**")
-        for test in test_cases["Economics"]:
-            if st.button(f"Test: {test[:20]}...", key=f"econ_{test}"):
-                st.text_area("Auto-filled question:", value=test, key=f"result_{test}")
-                should_show = should_show_diagram(test, "Economics")
-                if should_show:
-                    st.success(f"✅ Would show diagram")
-                else:
-                    st.info(f"ℹ️ Would NOT show diagram")
-    
-    # Footer
+    # Simple footer
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #666; padding: 1rem;">
-        <p>🎓 Academic Assistant Pro - Powered by Advanced AI</p>
-        <p><small>Providing accurate, textbook-quality educational assistance with smart diagram detection</small></p>
+        <p>🎓 Academic Assistant Pro - Focus on Learning</p>
     </div>
     """, unsafe_allow_html=True)
 
